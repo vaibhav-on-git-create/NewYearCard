@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Happy New Year 🎆</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Festive background elements -->
+  <div class="bg-firework bg-fw1"></div>
+  <div class="bg-firework bg-fw2"></div>
+  <div class="bg-firework bg-fw3"></div>
+  <div class="bg-firework bg-fw4"></div>
+
+  <div class="sparkle s1"></div><div class="sparkle s2"></div><div class="sparkle s3"></div><div class="sparkle s4"></div>
+  <div class="confetti c1"></div><div class="confetti c2"></div><div class="confetti c3"></div><div class="confetti c4"></div>
+  <div class="glow-ring g1"></div><div class="glow-ring g2"></div>
+
+  <!-- EMOJI RAIN LAYER (Added) -->
+  <div id="emoji-layer" aria-hidden="true"></div>
+
+  <!-- YOUR PERSONAL SOUND FILE (music.mp3 / music.wav) -->
+  <audio id="bg-music" loop preload="auto">
+    <source src="music.mp3" type="audio/mpeg">
+    <source src="music.wav" type="audio/wav">
+  </audio>
+
+  <!-- Input screen -->
+  <main class="card" id="input-screen">
+    <h1 class="title">Happy New Year</h1>
+    <p class="subtitle">Enter your name to launch the celebration.</p>
+
+    <form class="form" onsubmit="startWish(event)">
+      <input id="name-input" type="text" placeholder="Your name..." required />
+      <button type="submit">Launch</button>
+    </form>
+
+    <div class="sound-row">
+      <label class="switch">
+        <input id="sound-toggle" type="checkbox" checked />
+        <span class="slider"></span>
+      </label>
+      <span class="sound-label">Sound</span>
+    </div>
+  </main>
+
+  <!-- Celebration screen -->
+  <section class="celebration hidden" id="celebration-screen" aria-hidden="true">
+    <!-- 9 fireworks spots -->
+    <div class="fw fw1"></div><div class="fw fw2"></div><div class="fw fw3"></div>
+    <div class="fw fw4"></div><div class="fw fw5"></div><div class="fw fw6"></div>
+    <div class="fw fw7"></div><div class="fw fw8"></div><div class="fw fw9"></div>
+
+    <h2 class="greet" id="greet"></h2>
+    <p class="msg" id="msg"></p>
+
+    <div class="actions">
+      <button class="ghost" onclick="restart()">Make another wish</button>
+    </div>
+  </section>
+
+  <script>
+    // ---------- EMOJI RAIN LOGIC (Added) ----------
+    const EMOJIS = ["🎉","✨","🎊","🥳","💖","🔥","⭐","🎆","🎇","💫","🍾","🪄","🌟","🧨"];
+    let emojiTimer = null;
+
+    function spawnEmoji() {
+      const layer = document.getElementById("emoji-layer");
+      if (!layer) return;
+
+      const el = document.createElement("span");
+      el.className = "emoji-pop";
+      el.textContent = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+
+      const x = Math.random() * 100; // 0-100% width
+      const drift = (Math.random() * 300 - 150).toFixed(0); 
+      const size = (24 + Math.random() * 48).toFixed(0);
+      const dur = (1500 + Math.random() * 2000).toFixed(0);
+
+      el.style.left = x + "%";
+      el.style.setProperty("--drift", drift + "px");
+      el.style.setProperty("--size", size + "px");
+      el.style.setProperty("--dur", dur + "ms");
+
+      el.addEventListener("animationend", () => el.remove());
+      layer.appendChild(el);
+    }
+
+    function startEmojiRain() {
+      stopEmojiRain();
+      // Spawn 6 emojis every 120ms (increase/decrease for density)
+      emojiTimer = setInterval(() => {
+        for (let i = 0; i < 6; i++) spawnEmoji();
+      }, 120);
+    }
+
+    function stopEmojiRain() {
+      if (emojiTimer) clearInterval(emojiTimer);
+      emojiTimer = null;
+      const layer = document.getElementById("emoji-layer");
+      if (layer) layer.innerHTML = "";
+    }
+
+    // ---------- EXISTING LOGIC ----------
+    const TYPES = ["burst", "rainbow", "ring"];
+
+    function pick(arr) {
+      return arr[Math.floor(Math.random() * arr.length)];
+    }
+
+    let audioCtx = null;
+
+    function ensureAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      return audioCtx;
+    }
+
+    function playBoom(kind, volume = 0.35) {
+      const soundOn = document.getElementById("sound-toggle").checked;
+      if (!soundOn) return;
+
+      const ctx = ensureAudio();
+      const now = ctx.currentTime;
+
+      const master = ctx.createGain();
+      master.gain.setValueAtTime(volume, now);
+      master.connect(ctx.destination);
+
+      const bufferSize = Math.floor(ctx.sampleRate * 0.25);
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+
+      for (let i = 0; i < bufferSize; i++) {
+        const t = i / bufferSize;
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 3);
+      }
+
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const noiseFilter = ctx.createBiquadFilter();
+      noiseFilter.type = "highpass";
+      noiseFilter.frequency.value = kind === "ring" ? 900 : 700;
+
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.0001, now);
+      noiseGain.gain.exponentialRampToValueAtTime(1.0, now + 0.01);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + (kind === "burst" ? 0.22 : kind === "rainbow" ? 0.28 : 0.18));
+
+      noise.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+      noiseGain.connect(master);
+
+      const osc = ctx.createOscillator();
+      const og = ctx.createGain();
+
+      osc.type = "sine";
+      const baseFreq = kind === "burst" ? 70 : kind === "rainbow" ? 90 : 110;
+      osc.frequency.setValueAtTime(baseFreq, now);
+      osc.frequency.exponentialRampToValueAtTime(35, now + 0.18);
+
+      og.gain.setValueAtTime(0.0001, now);
+      og.gain.exponentialRampToValueAtTime(0.8, now + 0.01);
+      og.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+
+      osc.connect(og);
+      og.connect(master);
+
+      noise.start(now);
+      noise.stop(now + 0.35);
+
+      osc.start(now);
+      osc.stop(now + 0.3);
+    }
+
+    function startWish(e) {
+      e.preventDefault();
+
+      const name = document.getElementById("name-input").value.trim() || "Friend";
+      const inputScreen = document.getElementById("input-screen");
+      const celebration = document.getElementById("celebration-screen");
+
+      ensureAudio();
+
+      const bgMusic = document.getElementById("bg-music");
+      if (bgMusic && document.getElementById("sound-toggle").checked) {
+        bgMusic.volume = 0.4;
+        bgMusic.play().catch(e => console.log("Music autoplay blocked"));
+      }
+
+      // START EMOJI RAIN 🌧️
+      startEmojiRain();
+
+      const fws = Array.from(document.querySelectorAll(".fw"));
+      fws.forEach((el) => {
+        el.classList.remove("burst", "rainbow", "ring", "run");
+        el.classList.add(pick(TYPES));
+      });
+
+      document.getElementById("greet").textContent = `Happy New Year, ${name}! 2026`;
+      document.getElementById("msg").textContent = "Wishing you a year full of happiness, success, and new beginnings.";
+
+      inputScreen.classList.add("fade-out");
+      setTimeout(() => {
+        inputScreen.style.display = "none";
+        celebration.classList.remove("hidden");
+        celebration.setAttribute("aria-hidden", "false");
+        celebration.classList.add("fade-in");
+
+        fws.forEach((el, i) => {
+          const delay = 120 + Math.random() * 400 + i * 70;
+          setTimeout(() => {
+            el.classList.add("run");
+
+            if (el.classList.contains("burst")) playBoom("burst");
+            else if (el.classList.contains("rainbow")) playBoom("rainbow");
+            else playBoom("ring");
+          }, delay);
+        });
+      }, 420);
+    }
+
+    function restart() {
+      const inputScreen = document.getElementById("input-screen");
+      const celebration = document.getElementById("celebration-screen");
+
+      const bgMusic = document.getElementById("bg-music");
+      if (bgMusic) {
+        bgMusic.pause();
+        bgMusic.currentTime = 0;
+      }
+
+      // STOP EMOJI RAIN 🛑
+      stopEmojiRain();
+
+      celebration.classList.add("fade-out");
+      setTimeout(() => {
+        document.querySelectorAll(".fw").forEach((el) => el.classList.remove("run"));
+
+        celebration.classList.add("hidden");
+        celebration.classList.remove("fade-in", "fade-out");
+        celebration.setAttribute("aria-hidden", "true");
+
+        inputScreen.style.display = "block";
+        inputScreen.classList.remove("fade-out");
+
+        const inp = document.getElementById("name-input");
+        inp.value = "";
+        inp.focus();
+      }, 420);
+    }
+
+    window.restart = restart;
+  </script>
+</body>
+</html>
